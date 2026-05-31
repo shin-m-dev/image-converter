@@ -101,7 +101,7 @@
                     <!-- プライバシー保護バッジ -->
                     <span class="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200 flex items-center">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                        Exif情報は削除されます
+                        Exif情報は自動削除されます
                     </span>
                 </h2>
                 
@@ -128,7 +128,6 @@
                         <div class="flex flex-wrap gap-1.5 mb-2" id="suffix-presets">
                             <button type="button" data-value="_resized" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">_resized</button>
                             <button type="button" data-value="_small" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">_small</button>
-                            <button type="button" data-value="_web" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">_web</button>
                         </div>
                         <input type="text" id="setting-suffix" value="" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="自由入力（例: _resized）">
                     </div>
@@ -322,18 +321,13 @@
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf("image") !== -1) {
                     const blob = items[i].getAsFile();
-                    // クリップボードからの画像は通常 "image.png" 等になるため、現在時刻を付与してユニークにする
-                    const now = new Date();
-                    const timestamp = now.getTime();
                     files.push(blob);
                 }
             }
 
             if (files.length > 0) {
-                // ドロップゾーンのエフェクトを一時的に表示
                 dropZone.classList.add('drag-active');
                 setTimeout(() => dropZone.classList.remove('drag-active'), 200);
-                
                 handleFiles(files);
             }
         }
@@ -380,7 +374,6 @@
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
-                    // file.size (バイト数) を渡す
                     resizeAndAppendResult(img, file.name, file.type, file.size);
                     if (callback) callback();
                 };
@@ -391,6 +384,40 @@
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
+        }
+
+        // 高性能なステップダウン（段階的）リサイズアルゴリズム
+        function stepDownResize(img, targetWidth, targetHeight) {
+            let tempCanvas = document.createElement('canvas');
+            let tempCtx = tempCanvas.getContext('2d');
+            
+            let cw = img.width;
+            let ch = img.height;
+            
+            tempCanvas.width = cw;
+            tempCanvas.height = ch;
+            tempCtx.drawImage(img, 0, 0);
+            
+            // ターゲットサイズの2倍を基準に、段階的に50%ずつ縮小する
+            while (cw > targetWidth * 2) {
+                let nextW = Math.round(cw * 0.5);
+                let nextH = Math.round(ch * 0.5);
+                
+                let stepCanvas = document.createElement('canvas');
+                stepCanvas.width = nextW;
+                stepCanvas.height = nextH;
+                let stepCtx = stepCanvas.getContext('2d');
+                
+                stepCtx.imageSmoothingEnabled = true;
+                stepCtx.imageSmoothingQuality = 'high';
+                stepCtx.drawImage(tempCanvas, 0, 0, cw, ch, 0, 0, nextW, nextH);
+                
+                tempCanvas = stepCanvas;
+                cw = nextW;
+                ch = nextH;
+            }
+            
+            return tempCanvas;
         }
 
         function resizeAndAppendResult(img, fileName, originalType, originalBytes) {
@@ -413,12 +440,15 @@
             canvas.width = newWidth;
             canvas.height = newHeight;
 
-            // 高画質設定
+            // 2. 高画質ステップダウンリサイズを適用
+            const optimizedSource = stepDownResize(img, newWidth, newHeight);
+
+            // 最終キャンバスに高品質設定で描画
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, newWidth, newHeight);
+            ctx.drawImage(optimizedSource, 0, 0, optimizedSource.width, optimizedSource.height, 0, 0, newWidth, newHeight);
 
-            // 2. フォーマットと画質の決定
+            // 3. フォーマットと画質の決定
             let outputType = settingFormat.value;
             if (outputType === 'original') {
                 outputType = originalType === 'image/png' ? 'image/png' : 
@@ -426,7 +456,7 @@
             }
             const quality = parseFloat(settingQuality.value);
 
-            // 3. データ生成
+            // 4. データ生成
             const dataUrl = canvas.toDataURL(outputType, quality);
             
             // Blob生成（ZIP用）- dataURLから変換
@@ -437,8 +467,7 @@
             }
             const blob = new Blob([buffer.buffer], { type: outputType });
 
-            // 4. ファイル名生成
-            // ペーストされた画像の場合、fileNameが "image.png" など重複しやすいのでタイムスタンプで調整
+            // 5. ファイル名生成
             let baseName;
             if (fileName === 'image.png') {
                  const d = new Date();
@@ -468,7 +497,7 @@
                 dataUrl: dataUrl,
                 blob: blob,
                 originalSize: `${width}x${height}`,
-                originalBytes: originalBytes, // 追加
+                originalBytes: originalBytes,
                 newSize: `${newWidth}x${newHeight}`
             });
 
@@ -554,7 +583,6 @@
                     </a>
                 </div>
             `;
-            // 最新が上に来るように挿入
             resultsContainer.insertBefore(div, resultsContainer.firstChild);
         }
 
@@ -573,7 +601,6 @@
             input.focus();
             input.setSelectionRange(0, input.value.length);
 
-            // Enterで保存、Escでキャンセル
             input.onkeydown = function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -602,7 +629,6 @@
             const input = document.getElementById(`filename-input-${id}`);
             let newBaseName = input.value.trim();
             
-            // 空の場合はキャンセル扱い
             if (!newBaseName) {
                 cancelEditFileName(id);
                 return;
@@ -615,18 +641,15 @@
             file.baseName = newBaseName;
             file.fileName = `${newBaseName}.${file.ext}`;
 
-            // 表示の更新
             const displaySpan = document.getElementById(`filename-display-${id}`);
             displaySpan.textContent = newBaseName;
             document.getElementById(`filename-display-container-${id}`).title = file.fileName;
 
-            // 個別ダウンロードボタンの更新
             const downloadBtn = document.getElementById(`download-btn-${id}`);
             if (downloadBtn) {
                 downloadBtn.download = file.fileName;
             }
 
-            // UI状態を戻す
             document.getElementById(`filename-input-container-${id}`).classList.add('hidden');
             document.getElementById(`filename-input-container-${id}`).classList.remove('flex');
             document.getElementById(`filename-save-btn-${id}`).classList.add('hidden');
@@ -637,7 +660,6 @@
 
         function updateCount() {
             countDisplay.textContent = processedFiles.length;
-            // 複数ファイルがある場合のみZIPボタンのテキストを少し強調
             if (processedFiles.length > 1) {
                 downloadZipBtn.innerHTML = `
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
@@ -662,7 +684,6 @@
         async function downloadZip() {
             if (processedFiles.length === 0) return;
 
-            // ボタンをローディング状態に
             const originalText = downloadZipBtn.innerHTML;
             downloadZipBtn.disabled = true;
             downloadZipBtn.innerHTML = `
@@ -672,14 +693,11 @@
 
             try {
                 const zip = new JSZip();
-                
-                // 同じファイル名がある場合のハンドリング用マップ
                 const nameMap = {};
 
                 processedFiles.forEach(file => {
                     let fileName = file.fileName;
                     
-                    // 重複回避ロジック
                     if (nameMap[fileName]) {
                         nameMap[fileName]++;
                         const parts = fileName.split('.');
@@ -693,10 +711,8 @@
                     zip.file(fileName, file.blob);
                 });
 
-                // ZIP生成
                 const content = await zip.generateAsync({type: "blob"});
                 
-                // 現在時刻でファイル名作成
                 const date = new Date();
                 const timestamp = date.getFullYear().toString() +
                     (date.getMonth() + 1).toString().padStart(2, '0') +
@@ -710,7 +726,6 @@
                 console.error(err);
                 showError("ZIPファイルの作成に失敗しました。");
             } finally {
-                // ボタンを戻す
                 setTimeout(() => {
                     downloadZipBtn.innerHTML = originalText;
                     downloadZipBtn.disabled = false;
@@ -727,7 +742,6 @@
             errorMsg.classList.add('hidden');
         }
 
-        // バイト数を読みやすい形式に変換
         function formatBytes(bytes, decimals = 1) {
             if (bytes === 0) return '0 B';
             const k = 1024;
