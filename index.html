@@ -111,12 +111,12 @@
                         <label class="block text-xs font-semibold text-gray-500 mb-2">長辺サイズ (px)</label>
                         <!-- プリセットボタン (サイズ) -->
                         <div class="flex flex-wrap gap-1.5 mb-2" id="size-presets">
-                            <button type="button" data-value="1200" class="px-2 py-1 text-[10px] sm:text-xs border border-indigo-500 bg-indigo-50 text-indigo-700 rounded transition-colors font-medium">1200</button>
-                            <button type="button" data-value="1000" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">1000</button>
+                            <button type="button" data-value="1200" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">1200</button>
+                            <button type="button" data-value="1000" class="px-2 py-1 text-[10px] sm:text-xs border border-indigo-500 bg-indigo-50 text-indigo-700 rounded transition-colors font-medium">1000</button>
                             <button type="button" data-value="800" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">800</button>
                         </div>
                         <div class="relative">
-                            <input type="number" id="setting-size" value="1200" min="100" max="10000" class="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
+                            <input type="number" id="setting-size" value="1000" min="100" max="10000" class="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm">
                             <span class="absolute right-3 top-2.5 text-gray-400 text-sm">px</span>
                         </div>
                     </div>
@@ -126,11 +126,11 @@
                         <label class="block text-xs font-semibold text-gray-500 mb-2">ファイル名の末尾</label>
                         <!-- プリセットボタン (接尾辞) -->
                         <div class="flex flex-wrap gap-1.5 mb-2" id="suffix-presets">
-                            <button type="button" data-value="_resized" class="px-2 py-1 text-[10px] sm:text-xs border border-indigo-500 bg-indigo-50 text-indigo-700 rounded transition-colors font-medium">_resized</button>
+                            <button type="button" data-value="_resized" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">_resized</button>
                             <button type="button" data-value="_small" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">_small</button>
                             <button type="button" data-value="_web" class="px-2 py-1 text-[10px] sm:text-xs border border-gray-300 text-gray-600 rounded transition-colors hover:bg-gray-100">_web</button>
                         </div>
-                        <input type="text" id="setting-suffix" value="_resized" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="自由入力">
+                        <input type="text" id="setting-suffix" value="" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="自由入力（例: _resized）">
                     </div>
 
                     <!-- 3. 画質設定 -->
@@ -325,9 +325,6 @@
                     // クリップボードからの画像は通常 "image.png" 等になるため、現在時刻を付与してユニークにする
                     const now = new Date();
                     const timestamp = now.getTime();
-                    // ファイルオブジェクトを再作成して名前を変更するのは少し複雑なので、
-                    // 処理内で名前がない場合のフォールバックや、オブジェクト拡張で対応
-                    // ここでは簡易的に、Fileオブジェクトとしてそのまま渡す（ファイル名は "image.png" 等になる）
                     files.push(blob);
                 }
             }
@@ -400,7 +397,7 @@
             const ctx = canvas.getContext('2d');
             
             // 1. サイズ計算
-            const targetSize = parseInt(settingSize.value) || 1200;
+            const targetSize = parseInt(settingSize.value) || 1000;
             let width = img.width;
             let height = img.height;
             let newWidth, newHeight;
@@ -458,12 +455,15 @@
             if (outputType === 'image/webp') ext = 'webp';
             
             const suffix = settingSuffix.value;
-            const newFileName = `${baseName}${suffix}.${ext}`;
+            const newBaseName = `${baseName}${suffix}`;
+            const newFileName = `${newBaseName}.${ext}`;
 
             // 配列に保存
             const fileId = Date.now() + Math.random();
             processedFiles.push({
                 id: fileId,
+                baseName: newBaseName,
+                ext: ext,
                 fileName: newFileName,
                 dataUrl: dataUrl,
                 blob: blob,
@@ -513,7 +513,24 @@
                     <img src="${fileData.dataUrl}" class="max-w-full max-h-full object-contain">
                 </div>
                 <div class="flex-grow text-center sm:text-left min-w-0 w-full pr-6">
-                    <p class="font-bold text-gray-700 text-sm truncate" title="${fileData.fileName}">${fileData.fileName}</p>
+                    <div class="flex items-center gap-2 group/edit relative max-w-full justify-center sm:justify-start">
+                        <div id="filename-display-container-${fileData.id}" class="flex items-center min-w-0" title="${fileData.fileName}">
+                            <span id="filename-display-${fileData.id}" class="font-bold text-gray-700 text-sm truncate">${fileData.baseName}</span>
+                            <span class="font-bold text-gray-700 text-sm">.${fileData.ext}</span>
+                        </div>
+                        
+                        <div id="filename-input-container-${fileData.id}" class="hidden items-center w-full min-w-0 max-w-[200px]">
+                            <input type="text" id="filename-input-${fileData.id}" class="text-sm border border-indigo-300 rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500" value="${fileData.baseName}">
+                            <span class="text-gray-600 text-sm ml-1">.${fileData.ext}</span>
+                        </div>
+
+                        <button onclick="startEditFileName(${fileData.id})" id="filename-edit-btn-${fileData.id}" class="flex-shrink-0 text-gray-400 hover:text-indigo-600 opacity-0 group-hover/edit:opacity-100 transition-opacity p-1" title="ファイル名を編集">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <button onclick="saveFileName(${fileData.id})" id="filename-save-btn-${fileData.id}" class="hidden flex-shrink-0 text-green-600 hover:text-green-700 ml-1 p-1 bg-green-50 rounded" title="保存">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        </button>
+                    </div>
                     <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs text-gray-500 mt-2">
                         <!-- Before -->
                         <div class="flex items-center bg-gray-100 px-2 py-1 rounded border border-gray-200">
@@ -530,8 +547,8 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex-shrink-0 w-full sm:w-auto">
-                    <a href="${fileData.dataUrl}" download="${fileData.fileName}" class="flex items-center justify-center w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
+                <div class="flex-shrink-0 w-full sm:w-auto mt-3 sm:mt-0">
+                    <a id="download-btn-${fileData.id}" href="${fileData.dataUrl}" download="${fileData.fileName}" class="flex items-center justify-center w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         個別保存
                     </a>
@@ -539,6 +556,83 @@
             `;
             // 最新が上に来るように挿入
             resultsContainer.insertBefore(div, resultsContainer.firstChild);
+        }
+
+        function startEditFileName(id) {
+            document.getElementById(`filename-display-container-${id}`).classList.add('hidden');
+            document.getElementById(`filename-edit-btn-${id}`).classList.add('hidden');
+            
+            const inputContainer = document.getElementById(`filename-input-container-${id}`);
+            inputContainer.classList.remove('hidden');
+            inputContainer.classList.add('flex');
+            
+            const saveBtn = document.getElementById(`filename-save-btn-${id}`);
+            saveBtn.classList.remove('hidden');
+            
+            const input = document.getElementById(`filename-input-${id}`);
+            input.focus();
+            input.setSelectionRange(0, input.value.length);
+
+            // Enterで保存、Escでキャンセル
+            input.onkeydown = function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveFileName(id);
+                } else if (e.key === 'Escape') {
+                    cancelEditFileName(id);
+                }
+            };
+        }
+
+        function cancelEditFileName(id) {
+            const file = processedFiles.find(f => f.id === id);
+            if (!file) return;
+
+            document.getElementById(`filename-input-${id}`).value = file.baseName;
+            
+            document.getElementById(`filename-input-container-${id}`).classList.add('hidden');
+            document.getElementById(`filename-input-container-${id}`).classList.remove('flex');
+            document.getElementById(`filename-save-btn-${id}`).classList.add('hidden');
+            
+            document.getElementById(`filename-display-container-${id}`).classList.remove('hidden');
+            document.getElementById(`filename-edit-btn-${id}`).classList.remove('hidden');
+        }
+
+        function saveFileName(id) {
+            const input = document.getElementById(`filename-input-${id}`);
+            let newBaseName = input.value.trim();
+            
+            // 空の場合はキャンセル扱い
+            if (!newBaseName) {
+                cancelEditFileName(id);
+                return;
+            }
+
+            const fileIndex = processedFiles.findIndex(f => f.id === id);
+            if (fileIndex === -1) return;
+
+            const file = processedFiles[fileIndex];
+            file.baseName = newBaseName;
+            file.fileName = `${newBaseName}.${file.ext}`;
+
+            // 表示の更新
+            const displaySpan = document.getElementById(`filename-display-${id}`);
+            displaySpan.textContent = newBaseName;
+            document.getElementById(`filename-display-container-${id}`).title = file.fileName;
+
+            // 個別ダウンロードボタンの更新
+            const downloadBtn = document.getElementById(`download-btn-${id}`);
+            if (downloadBtn) {
+                downloadBtn.download = file.fileName;
+            }
+
+            // UI状態を戻す
+            document.getElementById(`filename-input-container-${id}`).classList.add('hidden');
+            document.getElementById(`filename-input-container-${id}`).classList.remove('flex');
+            document.getElementById(`filename-save-btn-${id}`).classList.add('hidden');
+            
+            document.getElementById(`filename-display-container-${id}`).classList.remove('hidden');
+            document.getElementById(`filename-edit-btn-${id}`).classList.remove('hidden');
         }
 
         function updateCount() {
